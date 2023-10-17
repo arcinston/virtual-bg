@@ -1,0 +1,21 @@
+{
+  "endOfLine": "lf",
+  "printWidth": 80,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "semi": true,
+  "arrowParens": "avoid",
+  "singleQuote": true,
+  "importOrder": [
+    "^react",
+    "<THIRD_PARTY_MODULES>",
+    "<TYPES>",
+    "^@/(.*)$",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderGroupNamespaceSpecifiers": true,
+  "importOrderSortSpecifiers": true,
+  "importOrderCombineTypeAndValueImports": true,
+  "importOrderBuiltinModulesToTop": true
+}

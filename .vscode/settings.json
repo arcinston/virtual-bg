@@ -1,0 +1,12 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": { "source.organizeImports": true },
+  "editor.tabSize": 2,
+  "workbench.colorCustomizations": {
+    "titleBar.activeBackground": "#16f993d5",
+    "titleBar.activeForeground": "#020617",
+    "titleBar.inactiveBackground": "#16f993aa",
+    "titleBar.inactiveForeground": "#020617"
+  }
+}
