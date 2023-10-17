@@ -12,19 +12,14 @@ type useSegmenterProps = {
 };
 
 export const useSegmenter = (props: useSegmenterProps) => {
-  const [fps, setFps] = useState(0);
-
-  const toggleEngine = useSetAtom(initEngineAtom);
-
   const segmenter = useAtomValue(segmenterEngineAtom);
-
-  console.log('useSegmenter', segmenter);
+  const toggleEngine = useSetAtom(initEngineAtom);
+  const [fps, setFps] = useState(0);
+  const [pipeline, setPipeline] = useState<any | null>(null);
 
   useEffect(() => {
-    toggleEngine(true);
-
     if (!segmenter) {
-      return;
+      toggleEngine(true); // Initialize the engine if it's not already
     }
 
     const targetTimerTimeoutMs = 1000 / props.targetFps;
@@ -43,12 +38,7 @@ export const useSegmenter = (props: useSegmenterProps) => {
       const startTime = performance.now();
 
       beginFrame();
-      segmenter
-        ?.segmentPeople(props.sourcePlayback.htmlElement)
-        .then(segment => {
-          console.log(segment);
-        });
-      addFrameEvent();
+
       endFrame();
 
       renderTimeoutId = timerWorker.setTimeout(
