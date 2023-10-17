@@ -1,34 +1,22 @@
+import { BackgroundConfig, SourcePlayback } from '@/types';
+import { createTimerWorker } from '@/utils/timerHelper';
 import '@mediapipe/selfie_segmentation';
 import * as bodySegmentation from '@tensorflow-models/body-segmentation';
-import { Segmentation } from '@tensorflow-models/body-segmentation/dist/shared/calculators/interfaces/common_interfaces';
 import '@tensorflow/tfjs-backend-webgl';
 import '@tensorflow/tfjs-core';
 import { useEffect, useState } from 'react';
 
-export type BackgroundConfig = {
-  type: 'none' | 'blur' | 'image';
-  url?: string;
+type useSegmenterProps = {
+  sourcePlayback: SourcePlayback;
+  backgroundConfig: BackgroundConfig;
+  targetFps: number;
 };
 
-export type SourcePlayback = {
-  htmlElement: HTMLImageElement | HTMLVideoElement;
-  width: number;
-  height: number;
-};
-
-export type BlendMode = 'screen' | 'linearDodge';
-
-export const useSegmenter = () => {
+export const useSegmenter = (props: useSegmenterProps) => {
   const [segmenter, setSegmenter] = useState<bodySegmentation.BodySegmenter>();
-  const foregroundThreshold = 0.5;
-  const backgroundBlurAmount = 3;
-  const edgeBlurAmount = 3;
-  const flipHorizontal = false;
-  let isLoading: boolean = false;
+  const [fps, setFps] = useState(0);
 
   const initSegmenter = async () => {
-    if (isLoading) return;
-    isLoading = true;
     console.log('initSegmenter');
     const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
     const newSegmenter = await bodySegmentation.createSegmenter(model, {
@@ -39,35 +27,77 @@ export const useSegmenter = () => {
     });
 
     setSegmenter(newSegmenter);
-    isLoading = false;
   };
 
   useEffect(() => {
-    initSegmenter();
+    if (!segmenter) {
+      initSegmenter();
+      return;
+    }
+
+    const targetTimerTimeoutMs = 1000 / props.targetFps;
+
+    let previousTime = 0;
+    let beginTime = 0;
+    let eventCount = 0;
+    let frameCount = 0;
+    const frameDurations: number[] = [];
+
+    let renderTimeoutId: number;
+
+    const timerWorker = createTimerWorker();
+    async function render() {
+      if (!segmenter) return;
+      const startTime = performance.now();
+
+      beginFrame();
+
+      segmenter.segmentPeople(props.sourcePlayback.htmlElement);
+
+      addFrameEvent();
+      endFrame();
+
+      renderTimeoutId = timerWorker.setTimeout(
+        render,
+        Math.max(0, targetTimerTimeoutMs - (performance.now() - startTime))
+      );
+    }
+
+    function beginFrame() {
+      beginTime = Date.now();
+    }
+
+    function addFrameEvent() {
+      const time = Date.now();
+      frameDurations[eventCount] = time - beginTime;
+      beginTime = time;
+      eventCount++;
+    }
+
+    function endFrame() {
+      const time = Date.now();
+      frameDurations[eventCount] = time - beginTime;
+      frameCount++;
+      if (time >= previousTime + 1000) {
+        setFps((frameCount * 1000) / (time - previousTime));
+        previousTime = time;
+        frameCount = 0;
+      }
+      eventCount = 0;
+    }
+
+    render();
+
     return () => {
+      timerWorker.clearTimeout(renderTimeoutId);
+      timerWorker.terminate();
       segmenter?.dispose();
     };
-  }, []);
-
-  const drawBokeh = async (data: {
-    canvas: HTMLCanvasElement;
-    image: HTMLImageElement | HTMLVideoElement;
-    segmentation: Segmentation | Segmentation[];
-  }) => {
-    await bodySegmentation.drawBokehEffect(
-      data.canvas,
-      data.image,
-      data.segmentation,
-      foregroundThreshold,
-      backgroundBlurAmount,
-      edgeBlurAmount,
-      flipHorizontal
-    );
-  };
+  }, [props.sourcePlayback.htmlElement, props.targetFps, segmenter]);
 
   return {
     segmenter,
     initSegmenter,
-    drawBokeh,
+    fps,
   };
 };

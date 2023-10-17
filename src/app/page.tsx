@@ -8,7 +8,17 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { videoSteam } = useMedia();
-  const { segmenter, drawBokeh } = useSegmenter();
+  const { segmenter, fps } = useSegmenter({
+    backgroundConfig: {
+      type: 'blur',
+    },
+    sourcePlayback: {
+      htmlElement: videoRef.current!,
+      height: videoRef.current?.videoHeight!,
+      width: videoRef.current?.videoWidth!,
+    },
+    targetFps: 30,
+  });
 
   useEffect(() => {
     if (videoSteam && videoRef.current && !videoRef.current.srcObject) {
@@ -17,29 +27,12 @@ export default function Home() {
     }
   }, [videoSteam, videoRef]);
 
-  async function segment() {
-    if (
-      segmenter &&
-      videoRef.current &&
-      videoRef.current.videoWidth > 0 &&
-      canvasRef.current
-    ) {
-      const segmentation = await segmenter.segmentPeople(videoRef.current);
-      drawBokeh({
-        canvas: canvasRef.current,
-        segmentation,
-        image: videoRef.current,
-      });
-    }
-  }
-
-  setInterval(segment, 1000 / 30);
-
   return (
     <div>
       <h1>Segmenter heloo</h1>
       <video ref={videoRef}></video>
-      <button onClick={segment}>Segment</button>
+      <h1>FPS:{fps}</h1>
+      {/* <button onClick={segment}>Segment</button> */}
       <canvas ref={canvasRef}></canvas>
     </div>
   );
