@@ -15,6 +15,8 @@
     "@tensorflow/tfjs-converter": "^4.12.0-rc.0",
     "@tensorflow/tfjs-core": "^4.11.0",
     "@types/emscripten": "^1.39.8",
+    "encoding": "^0.1.13",
+    "jotai": "^2.4.3",
     "next": "13.5.5",
     "react": "^18",
     "react-dom": "^18"

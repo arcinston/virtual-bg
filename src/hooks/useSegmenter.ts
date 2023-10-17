@@ -1,9 +1,8 @@
 import { BackgroundConfig, SourcePlayback } from '@/types';
+import { initEngineAtom, segmenterEngineAtom } from '@/utils/Segmenter';
 import { createTimerWorker } from '@/utils/timerHelper';
-import '@mediapipe/selfie_segmentation';
-import * as bodySegmentation from '@tensorflow-models/body-segmentation';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-core';
+import { useAtomValue, useSetAtom } from 'jotai';
+
 import { useEffect, useState } from 'react';
 
 type useSegmenterProps = {
@@ -13,27 +12,19 @@ type useSegmenterProps = {
 };
 
 export const useSegmenter = (props: useSegmenterProps) => {
-  const [segmenter, setSegmenter] =
-    useState<bodySegmentation.BodySegmenter | null>(null);
   const [fps, setFps] = useState(0);
 
-  const initSegmenter = async () => {
-    console.log('segmenting');
+  const toggleEngine = useSetAtom(initEngineAtom);
 
-    const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+  const segmenter = useAtomValue(segmenterEngineAtom);
 
-    const newSegementer = await bodySegmentation.createSegmenter(model, {
-      runtime: 'mediapipe',
-      solutionPath:
-        'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
-      modelType: 'general',
-    });
-    setSegmenter(newSegementer);
-  };
+  console.log('useSegmenter', segmenter);
 
   useEffect(() => {
+    toggleEngine(true);
+
     if (!segmenter) {
-      initSegmenter();
+      return;
     }
 
     const targetTimerTimeoutMs = 1000 / props.targetFps;
@@ -52,7 +43,11 @@ export const useSegmenter = (props: useSegmenterProps) => {
       const startTime = performance.now();
 
       beginFrame();
-      segmenter?.segmentPeople(props.sourcePlayback.htmlElement);
+      segmenter
+        ?.segmentPeople(props.sourcePlayback.htmlElement)
+        .then(segment => {
+          console.log(segment);
+        });
       addFrameEvent();
       endFrame();
 
@@ -88,11 +83,16 @@ export const useSegmenter = (props: useSegmenterProps) => {
     render();
 
     return () => {
-      segmenter?.dispose();
+      toggleEngine(false);
       timerWorker.clearTimeout(renderTimeoutId);
       timerWorker.terminate();
     };
-  }, [props.sourcePlayback.htmlElement, props.targetFps, segmenter]);
+  }, [
+    props.sourcePlayback.htmlElement,
+    props.targetFps,
+    segmenter,
+    toggleEngine,
+  ]);
 
   return {
     segmenter,
