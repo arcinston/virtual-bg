@@ -13,26 +13,27 @@ type useSegmenterProps = {
 };
 
 export const useSegmenter = (props: useSegmenterProps) => {
-  const [segmenter, setSegmenter] = useState<bodySegmentation.BodySegmenter>();
+  const [segmenter, setSegmenter] =
+    useState<bodySegmentation.BodySegmenter | null>(null);
   const [fps, setFps] = useState(0);
 
   const initSegmenter = async () => {
-    console.log('initSegmenter');
+    console.log('segmenting');
+
     const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
-    const newSegmenter = await bodySegmentation.createSegmenter(model, {
+
+    const newSegementer = await bodySegmentation.createSegmenter(model, {
       runtime: 'mediapipe',
       solutionPath:
         'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
       modelType: 'general',
     });
-
-    setSegmenter(newSegmenter);
+    setSegmenter(newSegementer);
   };
 
   useEffect(() => {
     if (!segmenter) {
       initSegmenter();
-      return;
     }
 
     const targetTimerTimeoutMs = 1000 / props.targetFps;
@@ -46,14 +47,12 @@ export const useSegmenter = (props: useSegmenterProps) => {
     let renderTimeoutId: number;
 
     const timerWorker = createTimerWorker();
+
     async function render() {
-      if (!segmenter) return;
       const startTime = performance.now();
 
       beginFrame();
-
-      segmenter.segmentPeople(props.sourcePlayback.htmlElement);
-
+      segmenter?.segmentPeople(props.sourcePlayback.htmlElement);
       addFrameEvent();
       endFrame();
 
@@ -89,15 +88,14 @@ export const useSegmenter = (props: useSegmenterProps) => {
     render();
 
     return () => {
+      segmenter?.dispose();
       timerWorker.clearTimeout(renderTimeoutId);
       timerWorker.terminate();
-      segmenter?.dispose();
     };
   }, [props.sourcePlayback.htmlElement, props.targetFps, segmenter]);
 
   return {
     segmenter,
-    initSegmenter,
     fps,
   };
 };
