@@ -11,7 +11,7 @@ export type TimerWorker = {
 export function createTimerWorker(): TimerWorker {
   const callbacks = new Map<number, () => void>();
 
-  const worker = new Worker(new URL('./timerWorker', import.meta.url));
+  const worker = new Worker(new URL('../helper/timerWorker', import.meta.url));
 
   worker.onmessage = (event: MessageEvent<TimerData>) => {
     const callback = callbacks.get(event.data.callbackId);

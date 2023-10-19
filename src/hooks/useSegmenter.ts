@@ -1,73 +1,145 @@
-import '@mediapipe/selfie_segmentation';
-import * as bodySegmentation from '@tensorflow-models/body-segmentation';
-import { Segmentation } from '@tensorflow-models/body-segmentation/dist/shared/calculators/interfaces/common_interfaces';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-core';
-import { useEffect, useState } from 'react';
+import { buildWebGlPipeline } from '@/pipeline/webglPipeline';
+import { BackgroundConfig, SourcePlayback } from '@/types';
+import { initEngineAtom, segmenterEngineAtom } from '@/utils/Segmenter';
+import { createTimerWorker } from '@/utils/timerHelper';
+import { useAtomValue, useSetAtom } from 'jotai';
 
-export type BackgroundConfig = {
-  type: 'none' | 'blur' | 'image';
-  url?: string;
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+type useSegmenterProps = {
+  sourcePlayback: SourcePlayback;
+  backgroundConfig: BackgroundConfig;
+  targetFps: number;
 };
 
-export type SourcePlayback = {
-  htmlElement: HTMLImageElement | HTMLVideoElement;
-  width: number;
-  height: number;
-};
+export const useSegmenter = (props: useSegmenterProps) => {
+  const segmenter = useAtomValue(segmenterEngineAtom);
+  const toggleEngine = useSetAtom(initEngineAtom);
+  const [fps, setFps] = useState(0);
+  const isMounted = useRef(true);
+  const backgroundImageRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null!);
+  const [pipeline, setPipeline] = useState<any>(null);
 
-export type BlendMode = 'screen' | 'linearDodge';
+  console.log('useSegmenter.ts: useSegmenter()');
+  console.log('isMounted.current: ', isMounted.current);
 
-export const useSegmenter = () => {
-  const [segmenter, setSegmenter] = useState<bodySegmentation.BodySegmenter>();
-  const foregroundThreshold = 0.5;
-  const backgroundBlurAmount = 3;
-  const edgeBlurAmount = 3;
-  const flipHorizontal = false;
-  let isLoading: boolean = false;
-
-  const initSegmenter = async () => {
-    if (isLoading) return;
-    isLoading = true;
-    console.log('initSegmenter');
-    const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
-    const newSegmenter = await bodySegmentation.createSegmenter(model, {
-      runtime: 'mediapipe',
-      solutionPath:
-        'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
-      modelType: 'general',
-    });
-
-    setSegmenter(newSegmenter);
-    isLoading = false;
-  };
+  const cleanUpPipeline = useCallback(() => {
+    if (pipeline) {
+      pipeline.cleanUp();
+      setPipeline(null);
+    }
+  }, [pipeline]);
 
   useEffect(() => {
-    initSegmenter();
     return () => {
-      segmenter?.dispose();
+      isMounted.current = false;
+      cleanUpPipeline();
     };
-  }, []);
+  }, [cleanUpPipeline]);
 
-  const drawBokeh = async (data: {
-    canvas: HTMLCanvasElement;
-    image: HTMLImageElement | HTMLVideoElement;
-    segmentation: Segmentation | Segmentation[];
-  }) => {
-    await bodySegmentation.drawBokehEffect(
-      data.canvas,
-      data.image,
-      data.segmentation,
-      foregroundThreshold,
-      backgroundBlurAmount,
-      edgeBlurAmount,
-      flipHorizontal
+  useEffect(() => {
+    if (!segmenter) {
+      toggleEngine(true);
+    }
+
+    return () => {
+      if (segmenter) {
+        toggleEngine(false);
+      }
+    };
+  }, [toggleEngine, segmenter]);
+
+  useEffect(() => {
+    if (!segmenter || !isMounted.current) {
+      return;
+    }
+    const targetTimerTimeoutMs = 1000 / props.targetFps;
+
+    let previousTime = 0;
+    let beginTime = 0;
+    let eventCount = 0;
+    let frameCount = 0;
+    const frameDurations: number[] = [];
+
+    let renderTimeoutId: number;
+
+    const timerWorker = createTimerWorker();
+
+    const newPipeline = buildWebGlPipeline(
+      props.sourcePlayback,
+      props.backgroundConfig,
+      backgroundImageRef.current,
+      canvasRef.current,
+      timerWorker,
+      addFrameEvent,
+      segmenter
     );
-  };
+
+    async function render() {
+      if (!isMounted.current) {
+        return;
+      }
+      const startTime = performance.now();
+
+      beginFrame();
+
+      endFrame();
+
+      renderTimeoutId = timerWorker.setTimeout(
+        render,
+        Math.max(0, targetTimerTimeoutMs - (performance.now() - startTime))
+      );
+    }
+
+    function beginFrame() {
+      beginTime = Date.now();
+    }
+
+    function addFrameEvent() {
+      const time = Date.now();
+      frameDurations[eventCount] = time - beginTime;
+      beginTime = time;
+      eventCount++;
+    }
+
+    function endFrame() {
+      const time = Date.now();
+      frameDurations[eventCount] = time - beginTime;
+      frameCount++;
+      if (time >= previousTime + 1000) {
+        setFps((frameCount * 1000) / (time - previousTime));
+        previousTime = time;
+        frameCount = 0;
+      }
+      eventCount = 0;
+    }
+
+    render();
+
+    if (newPipeline !== undefined && isMounted.current) {
+      setPipeline(newPipeline);
+    }
+
+    return () => {
+      timerWorker.clearTimeout(renderTimeoutId);
+      timerWorker.terminate();
+      cleanUpPipeline();
+    };
+  }, [
+    cleanUpPipeline,
+    props.backgroundConfig,
+    props.sourcePlayback,
+    props.sourcePlayback.htmlElement,
+    props.targetFps,
+    segmenter,
+  ]);
 
   return {
+    backgroundImageRef,
     segmenter,
-    initSegmenter,
-    drawBokeh,
+    fps,
+    pipeline,
+    canvasRef,
   };
 };
