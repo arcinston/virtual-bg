@@ -1,9 +1,10 @@
+import { buildWebGlPipeline } from '@/pipeline/webglPipeline';
 import { BackgroundConfig, SourcePlayback } from '@/types';
 import { initEngineAtom, segmenterEngineAtom } from '@/utils/Segmenter';
 import { createTimerWorker } from '@/utils/timerHelper';
 import { useAtomValue, useSetAtom } from 'jotai';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type useSegmenterProps = {
   sourcePlayback: SourcePlayback;
@@ -15,13 +16,44 @@ export const useSegmenter = (props: useSegmenterProps) => {
   const segmenter = useAtomValue(segmenterEngineAtom);
   const toggleEngine = useSetAtom(initEngineAtom);
   const [fps, setFps] = useState(0);
-  const [pipeline, setPipeline] = useState<any | null>(null);
+  const isMounted = useRef(true);
+  const backgroundImageRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null!);
+  const [pipeline, setPipeline] = useState<any>(null);
+
+  console.log('useSegmenter.ts: useSegmenter()');
+  console.log('isMounted.current: ', isMounted.current);
+
+  const cleanUpPipeline = useCallback(() => {
+    if (pipeline) {
+      pipeline.cleanUp();
+      setPipeline(null);
+    }
+  }, [pipeline]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      cleanUpPipeline();
+    };
+  }, [cleanUpPipeline]);
 
   useEffect(() => {
     if (!segmenter) {
-      toggleEngine(true); // Initialize the engine if it's not already
+      toggleEngine(true);
     }
 
+    return () => {
+      if (segmenter) {
+        toggleEngine(false);
+      }
+    };
+  }, [toggleEngine, segmenter]);
+
+  useEffect(() => {
+    if (!segmenter || !isMounted.current) {
+      return;
+    }
     const targetTimerTimeoutMs = 1000 / props.targetFps;
 
     let previousTime = 0;
@@ -34,7 +66,20 @@ export const useSegmenter = (props: useSegmenterProps) => {
 
     const timerWorker = createTimerWorker();
 
+    const newPipeline = buildWebGlPipeline(
+      props.sourcePlayback,
+      props.backgroundConfig,
+      backgroundImageRef.current,
+      canvasRef.current,
+      timerWorker,
+      addFrameEvent,
+      segmenter
+    );
+
     async function render() {
+      if (!isMounted.current) {
+        return;
+      }
       const startTime = performance.now();
 
       beginFrame();
@@ -72,20 +117,29 @@ export const useSegmenter = (props: useSegmenterProps) => {
 
     render();
 
+    if (newPipeline !== undefined && isMounted.current) {
+      setPipeline(newPipeline);
+    }
+
     return () => {
-      toggleEngine(false);
       timerWorker.clearTimeout(renderTimeoutId);
       timerWorker.terminate();
+      cleanUpPipeline();
     };
   }, [
+    cleanUpPipeline,
+    props.backgroundConfig,
+    props.sourcePlayback,
     props.sourcePlayback.htmlElement,
     props.targetFps,
     segmenter,
-    toggleEngine,
   ]);
 
   return {
+    backgroundImageRef,
     segmenter,
     fps,
+    pipeline,
+    canvasRef,
   };
 };

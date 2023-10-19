@@ -1,16 +1,17 @@
 'use client';
 import { useMedia } from '@/hooks/useMedia';
 import { useSegmenter } from '@/hooks/useSegmenter';
+import Image from 'next/image';
 import { useEffect, useRef } from 'react';
+import bgImage from './bgimage.jpeg';
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { videoSteam } = useMedia();
-  const { segmenter, fps } = useSegmenter({
+  const { fps, backgroundImageRef, canvasRef } = useSegmenter({
     backgroundConfig: {
-      type: 'blur',
+      type: 'image',
     },
     sourcePlayback: {
       htmlElement: videoRef.current!,
@@ -30,6 +31,7 @@ export default function Home() {
   return (
     <div>
       <h1>Segmenter heloo</h1>
+      <Image src={bgImage} ref={backgroundImageRef} alt="public/bgimage.jpeg" />
       <video ref={videoRef}></video>
       <h1>FPS:{fps}</h1>
       {/* <button onClick={segment}>Segment</button> */}

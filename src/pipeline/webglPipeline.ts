@@ -1,6 +1,7 @@
 import { BackgroundConfig, SourcePlayback } from '@/types';
 import { TSegmenterEngine } from '@/utils/Segmenter';
 import { TimerWorker } from '@/utils/timerHelper';
+import { buildBackgroundImageStage } from './backgroundImageStage';
 import { compileShader, createTexture, glsl } from './webglHelper';
 
 export const buildWebGlPipeline = (
@@ -28,7 +29,12 @@ export const buildWebGlPipeline = (
   const { width: frameWidth, height: frameHeight } = sourcePlayback;
   const [segmentationWidth, segmentationHeight] = [256, 256];
 
-  const gl = canvas.getContext('webgl2')!;
+  const gl = canvas.getContext('webgl2');
+  if (gl === null) {
+    // Handle the lack of WebGL2 support.
+    console.error('WebGL 2 is not available in your browser.');
+    return;
+  }
 
   const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
 
@@ -76,26 +82,21 @@ export const buildWebGlPipeline = (
     frameHeight
   )!;
 
-  const backgroundStage =
-    backgroundConfig.type === 'blur'
-      ? buildBackgroundBlurStage(
-          gl,
-          vertexShader,
-          positionBuffer,
-          texCoordBuffer,
-          personMaskTexture,
-          canvas
-        )
-      : buildBackgroundImageStage(
-          gl,
-          positionBuffer,
-          texCoordBuffer,
-          personMaskTexture,
-          backgroundImage,
-          canvas
-        );
+  const backgroundStage = buildBackgroundImageStage(
+    gl,
+    positionBuffer,
+    texCoordBuffer,
+    personMaskTexture,
+    backgroundImage,
+    canvas
+  );
 
   async function render() {
+    if (gl === null) {
+      // Handle the lack of WebGL2 support.
+      console.error('WebGL 2 is not available in your browser.');
+      return;
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, inputFrameTexture);
 
@@ -112,8 +113,6 @@ export const buildWebGlPipeline = (
 
     gl.bindVertexArray(vertexArray);
 
-    await resizingStage.render();
-
     addFrameEvent();
 
     const segment = await segmenterEngine.segmentPeople(
@@ -122,44 +121,17 @@ export const buildWebGlPipeline = (
 
     addFrameEvent();
 
-    loadSegmentationStage.render();
-    jointBilateralFilterStage.render();
     backgroundStage.render();
   }
 
-  function updatePostProcessingConfig(
-    postProcessingConfig: PostProcessingConfig
-  ) {
-    jointBilateralFilterStage.updateSigmaSpace(
-      postProcessingConfig.jointBilateralFilter.sigmaSpace
-    );
-    jointBilateralFilterStage.updateSigmaColor(
-      postProcessingConfig.jointBilateralFilter.sigmaColor
-    );
-
-    if (backgroundConfig.type === 'image') {
-      const backgroundImageStage = backgroundStage as BackgroundImageStage;
-      backgroundImageStage.updateCoverage(postProcessingConfig.coverage);
-      backgroundImageStage.updateLightWrapping(
-        postProcessingConfig.lightWrapping
-      );
-      backgroundImageStage.updateBlendMode(postProcessingConfig.blendMode);
-    } else if (backgroundConfig.type === 'blur') {
-      const backgroundBlurStage = backgroundStage as BackgroundBlurStage;
-      backgroundBlurStage.updateCoverage(postProcessingConfig.coverage);
-    } else {
-      // TODO Handle no background in a separate pipeline path
-      const backgroundImageStage = backgroundStage as BackgroundImageStage;
-      backgroundImageStage.updateCoverage([0, 0.9999]);
-      backgroundImageStage.updateLightWrapping(0);
-    }
-  }
-
   function cleanUp() {
+    if (gl === null) {
+      // Handle the lack of WebGL2 support.
+      console.error('WebGL 2 is not available in your browser.');
+      return;
+    }
+
     backgroundStage.cleanUp();
-    jointBilateralFilterStage.cleanUp();
-    loadSegmentationStage.cleanUp();
-    resizingStage.cleanUp();
 
     gl.deleteTexture(personMaskTexture);
     gl.deleteTexture(segmentationTexture);
@@ -170,5 +142,5 @@ export const buildWebGlPipeline = (
     gl.deleteShader(vertexShader);
   }
 
-  return { render, updatePostProcessingConfig, cleanUp };
+  return { render, cleanUp };
 };

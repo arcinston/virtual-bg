@@ -69,8 +69,8 @@ export function createTexture(
   internalformat: number,
   width: number,
   height: number,
-  minFilter = gl.NEAREST,
-  magFilter = gl.NEAREST
+  minFilter = gl.LINEAR,
+  magFilter = gl.LINEAR
 ) {
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
