@@ -21,9 +21,6 @@ export const useSegmenter = (props: useSegmenterProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null!);
   const [pipeline, setPipeline] = useState<any>(null);
 
-  console.log('useSegmenter.ts: useSegmenter()');
-  console.log('isMounted.current: ', isMounted.current);
-
   const cleanUpPipeline = useCallback(() => {
     if (pipeline) {
       pipeline.cleanUp();
@@ -32,25 +29,12 @@ export const useSegmenter = (props: useSegmenterProps) => {
   }, [pipeline]);
 
   useEffect(() => {
-    return () => {
-      isMounted.current = false;
-      cleanUpPipeline();
-    };
-  }, [cleanUpPipeline]);
-
-  useEffect(() => {
+    console.log('useSegmenter.ts: useSegmenter()');
+    console.log('isMounted.current: ', isMounted.current);
     if (!segmenter) {
       toggleEngine(true);
     }
 
-    return () => {
-      if (segmenter) {
-        toggleEngine(false);
-      }
-    };
-  }, [toggleEngine, segmenter]);
-
-  useEffect(() => {
     if (!segmenter || !isMounted.current) {
       return;
     }
@@ -125,15 +109,14 @@ export const useSegmenter = (props: useSegmenterProps) => {
       timerWorker.clearTimeout(renderTimeoutId);
       timerWorker.terminate();
       cleanUpPipeline();
+      isMounted.current = false;
+      console.log('useSegmenter.ts: useSegmenter()');
+      console.log('isMounted.current: ', isMounted.current);
+      if (segmenter) {
+        toggleEngine(false);
+      }
     };
-  }, [
-    cleanUpPipeline,
-    props.backgroundConfig,
-    props.sourcePlayback,
-    props.sourcePlayback.htmlElement,
-    props.targetFps,
-    segmenter,
-  ]);
+  }, [segmenter]);
 
   return {
     backgroundImageRef,
